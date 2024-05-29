@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, Integer, String, ForeignKey
+from sqlalchemy import create_engine, Column, Date, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -17,13 +17,14 @@ class Account(Base):
     cards = relationship("Card", back_populates="account")
     transactions = relationship("Transaction", back_populates="account")
 
-class Cards(Base):
+class Card(Base):
     __tablename__ = 'cards'
     id = Column(Integer, primary_key=True, index=True)
     UID = Column(String(8))
     expDate = Column(Date)
     blocked = Column(Integer)
     Account_IBAN = Column(String(18), ForeignKey('account.IBAN'))
+
 
     account = relationship("Account", back_populates="cards")
     pincodes = relationship("Pincode", back_populates="card")
@@ -37,11 +38,17 @@ class Transaction(Base):
 
     account = relationship("Account", back_populates="transactions")
 
-class Pincodes(Base):
+class Pincode(Base):
     __tablename__ = 'pincodes'
     pinID = Column(Integer, primary_key=True, index=True)
     pinCode = Column(Integer)
     Cards_id = Column(Integer, ForeignKey('cards.id'))
     Cards_Account_IBAN = Column(String(18), ForeignKey('account.IBAN'))
+    AttemptsRemaining = Column(Integer)
 
     card = relationship("Card", back_populates="pincodes")
+
+
+# Database connection setup
+engine = create_engine('mysql+pymysql://root:games123@145.24.223.91/banking')
+Base.metadata.create_all(engine)
