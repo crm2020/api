@@ -17,7 +17,7 @@ class Account(Base):
     cards = relationship("Card", back_populates="account")
     transactions = relationship("Transaction", back_populates="account")
 
-class Card(Base):
+class Cards(Base):
     __tablename__ = 'cards'
     id = Column(Integer, primary_key=True, index=True)
     UID = Column(String(8))
@@ -37,7 +37,7 @@ class Transaction(Base):
 
     account = relationship("Account", back_populates="transactions")
 
-class Pincode(Base):
+class Pincodes(Base):
     __tablename__ = 'pincodes'
     pinID = Column(Integer, primary_key=True, index=True)
     pinCode = Column(Integer)
