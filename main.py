@@ -16,7 +16,7 @@ DATABASE_URL = "mysql+aiomysql://root:games123@145.24.223.91/banking"
 
 app = FastAPI()
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+engine = create_async_engine(DATABASE_URL, echo=True, connect_args={"connect_timeout": 60})
 AsyncSessionLocal = sessionmaker(     autocommit=False, autoflush=False, bind=engine, class_=AsyncSession )
 
 # Dependency to get DB session
@@ -108,52 +108,53 @@ async def withdraw(request: WithdrawRequest, target: str = Query(...), db: Async
     if request.amount > 200:
         raise HTTPException(status_code=400)
     if request.amount <= 0:
-https://github.com/crm2020/api        raise HTTPException(status_code=400)
+        raise HTTPException(status_code=400)
 
-try:
-    account_result = await db.execute(select(Account).where(Account.IBAN == target))
-    account = account_result.scalar_one_or_none()
-    if account is None:
-        raise HTTPException(status_code=404)
+    try:
+        account_result = await db.execute(select(Account).where(Account.IBAN == target))
+        account = account_result.scalar_one_or_none()
+        if account is None:
+            raise HTTPException(status_code=404)
 
-    card_result = await db.execute(select(Card).where(Card.Account_IBAN == target, Card.UID == request.uid))
-    card = card_result.scalar_one_or_none()
-    if card is None:
-        raise HTTPException(status_code=404)
+        card_result = await db.execute(select(Card).where(Card.Account_IBAN == target, Card.UID == request.uid))
+        card = card_result.scalar_one_or_none()
+        if card is None:
+            raise HTTPException(status_code=404)
 
-    pincode_result = await db.execute(select(Pincode).where(Pincode.Cards_id == card.id, Pincode.pinCode == request.pincode))
-    pincode = pincode_result.scalar_one_or_none()
-
-    if pincode is None:
-        pincode_result = await db.execute(select(Pincode).where(Pincode.Cards_id == card.id))
+        pincode_result = await db.execute(select(Pincode).where(Pincode.Cards_id == card.id, Pincode.pinCode == request.pincode))
         pincode = pincode_result.scalar_one_or_none()
-        if pincode is not None:
-            pincode.AttemptsRemaining -= 1
-            if pincode.AttemptsRemaining <= 0:
-                card.Blocked = 1
+
+        if pincode is None:
+            pincode_result = await db.execute(select(Pincode).where(Pincode.Cards_id == card.id))
+            pincode = pincode_result.scalar_one_or_none()
+            print(pincode)
+            if pincode is not None:
+                pincode.AttemptsRemaining -= 1
+                if pincode.AttemptsRemaining <= 0:
+                    card.blocked = 1
+                    await db.commit()
+                    raise HTTPException(status_code=403)
                 await db.commit()
-                raise HTTPException(status_code=403)
-            await db.commit()
-            raise HTTPException(status_code=401)
+                raise HTTPException(status_code=401)
 
-    if card.Blocked:
-        raise HTTPException(status_code=403)
+        if card.blocked:
+            raise HTTPException(status_code=403)
 
-    if account.balance < request.amount:
-        raise HTTPException(status_code=412)
+        if account.balance < request.amount:
+            raise HTTPException(status_code=412)
 
-    account.balance -= request.amount
+        account.balance -= request.amount
 
-    transaction = Transaction(date=datetime.now(), amount=request.amount, account_iban=target)
-    db.add(transaction)
+        transaction = Transaction(date=datetime.now(), amount=request.amount, Account_IBAN=target)
+        db.add(transaction)
 
-    await db.commit()  # This line updates the balance in the database
-    await db.refresh(account)
-except HTTPException as http_exc:
-    logger.error("HTTPException: %s", http_exc.detail)
-    raise http_exc
-except Exception as e:
-    logger.error("Exception: %s", str(e))
-    raise HTTPException(status_code=500)
+        await db.commit()  # This line updates the balance in the database
+        await db.refresh(account)
+    except HTTPException as http_exc:
+        logger.error("HTTPException: %s", http_exc.detail)
+        raise http_exc
+    except Exception as e:
+        logger.error("Exception: %s", str(e))
+        raise HTTPException(status_code=500)
 
-return {"status": "Success"}
+    return {"status": "Success"}
